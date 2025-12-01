@@ -1,0 +1,24 @@
+# Virtual environment
+venv/
+.venv/
+
+# Model files (too large for git, download separately)
+*.onnx
+*.bin
+
+# Test files
+test.txt
+test.wav
+test.mp3
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Output files
+*.mp3
+*.wav
+
+# OS
+.DS_Store
