@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -40,13 +41,68 @@ def list_voices(model):
         print(f"  - {voice}")
 
 
-def text_to_audio(model, text: str, voice: str = "af_heart") -> tuple[np.ndarray, int]:
-    """Convert text to audio using Kokoro TTS."""
-    samples, sample_rate = model.create(text, voice=voice)
-    return samples, sample_rate
+def split_text_into_chunks(text, max_chars=400):
+    """Split text into chunks at sentence boundaries."""
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    
+    chunks = []
+    current_chunk = ""
+    
+    for sentence in sentences:
+        if len(sentence) > max_chars:
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+                current_chunk = ""
+            parts = re.split(r'(?<=[,;:])\s+', sentence)
+            for part in parts:
+                if len(current_chunk) + len(part) + 1 <= max_chars:
+                    current_chunk += (" " if current_chunk else "") + part
+                else:
+                    if current_chunk:
+                        chunks.append(current_chunk.strip())
+                    current_chunk = part
+        elif len(current_chunk) + len(sentence) + 1 <= max_chars:
+            current_chunk += (" " if current_chunk else "") + sentence
+        else:
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+            current_chunk = sentence
+    
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    
+    return chunks
 
 
-def save_audio(samples: np.ndarray, sample_rate: int, output_path: Path, format: str):
+def text_to_audio(model, text, voice="af_heart"):
+    """Convert text to audio using Kokoro TTS, handling long texts by chunking."""
+    chunks = split_text_into_chunks(text)
+    
+    if len(chunks) == 1:
+        samples, sample_rate = model.create(chunks[0], voice=voice)
+        return samples, sample_rate
+    
+    print(f"  Text split into {len(chunks)} chunks for processing...")
+    all_samples = []
+    sample_rate = None
+    
+    for i, chunk in enumerate(chunks, 1):
+        sys.stdout.write(f"\r  Processing chunk {i}/{len(chunks)}...")
+        sys.stdout.flush()
+        samples, sample_rate = model.create(chunk, voice=voice)
+        all_samples.append(samples)
+        pause = np.zeros(int(sample_rate * 0.3))
+        all_samples.append(pause)
+    
+    print()
+    
+    if all_samples:
+        all_samples = all_samples[:-1]
+    
+    return np.concatenate(all_samples), sample_rate
+
+
+def save_audio(samples, sample_rate, output_path, format):
     """Save audio samples to file in the specified format."""
     if format == "wav":
         sf.write(str(output_path), samples, sample_rate)
@@ -62,7 +118,7 @@ def save_audio(samples: np.ndarray, sample_rate: int, output_path: Path, format:
         raise ValueError(f"Unsupported format: {format}")
 
 
-def read_interactive_input() -> str:
+def read_interactive_input():
     """Read text from stdin in interactive mode."""
     print("Enter text to convert (press Ctrl+D when done):")
     print("-" * 40)
@@ -96,7 +152,7 @@ Note: MP3 output requires ffmpeg installed on your system.
   Linux:  sudo apt install ffmpeg
         """
     )
-    
+
     parser.add_argument(
         "input_file",
         nargs="?",
@@ -128,16 +184,16 @@ Note: MP3 output requires ffmpeg installed on your system.
         action="store_true",
         help="List available voices and exit"
     )
-    
+
     args = parser.parse_args()
-    
+
     print("Loading Kokoro TTS model...")
     model = get_kokoro_model()
-    
+
     if args.list_voices:
         list_voices(model)
         return
-    
+
     if args.interactive:
         text = read_interactive_input()
     elif args.input_file:
@@ -149,34 +205,34 @@ Note: MP3 output requires ffmpeg installed on your system.
         parser.print_help()
         print("\nError: Please provide an input file or use -i for interactive mode.")
         sys.exit(1)
-    
+
     if not text.strip():
         print("Error: No text to convert.")
         sys.exit(1)
-    
+
     if not args.output:
         if args.input_file:
             args.output = args.input_file.with_suffix(".mp3")
         else:
             args.output = Path("output.mp3")
-    
+
     if args.format:
         output_format = args.format
     elif args.output.suffix.lower() in [".mp3", ".wav"]:
         output_format = args.output.suffix.lower().lstrip(".")
     else:
         output_format = "mp3"
-    
+
     if not args.output.suffix.lower() == f".{output_format}":
         args.output = args.output.with_suffix(f".{output_format}")
-    
+
     print(f"Converting text ({len(text)} characters) using voice '{args.voice}'...")
     try:
         samples, sample_rate = text_to_audio(model, text, args.voice)
     except Exception as e:
         print(f"Error during TTS conversion: {e}")
         sys.exit(1)
-    
+
     print(f"Saving to {args.output}...")
     try:
         save_audio(samples, sample_rate, args.output, output_format)
@@ -185,7 +241,7 @@ Note: MP3 output requires ffmpeg installed on your system.
         if output_format == "mp3":
             print("Hint: Make sure ffmpeg is installed for MP3 output.")
         sys.exit(1)
-    
+
     duration = len(samples) / sample_rate
     print(f"Done! Created {args.output} ({duration:.1f} seconds)")
 
