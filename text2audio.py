@@ -41,7 +41,7 @@ def list_voices(model):
         print(f"  - {voice}")
 
 
-def split_text_into_chunks(text, max_chars=400):
+def split_text_into_chunks(text, max_chars=200):
     """Split text into chunks at sentence boundaries."""
     sentences = re.split(r'(?<=[.!?])\s+', text.strip())
     
