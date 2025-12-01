@@ -44,6 +44,53 @@ def list_voices(model):
         print(f"  - {voice}")
 
 
+
+def clean_text_for_speech(text):
+    """Remove markdown and special characters that disrupt speech."""
+    # Remove code blocks
+    text = re.sub(r"```[\s\S]*?```", " ", text)
+    text = re.sub(r"`[^`]+`", " ", text)
+    
+    # Remove markdown headers (# ## ### etc)
+    text = re.sub(r"^#{1,6}\s*", "", text, flags=re.MULTILINE)
+    
+    # Remove bold/italic markers
+    text = re.sub(r"\*\*\*([^*]+)\*\*\*", r"\1", text)  # ***bold italic***
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)  # **bold**
+    text = re.sub(r"\*([^*]+)\*", r"\1", text)  # *italic*
+    text = re.sub(r"___([^_]+)___", r"\1", text)  # ___bold italic___
+    text = re.sub(r"__([^_]+)__", r"\1", text)  # __bold__
+    text = re.sub(r"_([^_]+)_", r"\1", text)  # _italic_
+    
+    # Remove strikethrough
+    text = re.sub(r"~~([^~]+)~~", r"\1", text)
+    
+    # Remove markdown links [text](url) -> text
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    
+    # Remove image syntax ![alt](url)
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+    
+    # Remove horizontal rules
+    text = re.sub(r"^[-*_]{3,}\s*$", " ", text, flags=re.MULTILINE)
+    
+    # Remove bullet points and list markers
+    text = re.sub(r"^\s*[-*+]\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*\d+\.\s+", "", text, flags=re.MULTILINE)
+    
+    # Remove blockquote markers
+    text = re.sub(r"^>+\s*", "", text, flags=re.MULTILINE)
+    
+    # Remove remaining special characters that sound bad
+    text = re.sub(r"[#*_~`<>|\\]", "", text)
+    
+    # Clean up extra whitespace
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"  +", " ", text)
+    
+    return text.strip()
+
+
 def split_text_into_chunks(text, max_chars=MAX_CHUNK_CHARS):
     """Split text into chunks, ensuring each chunk is under max_chars."""
     # First, split on sentence boundaries
@@ -241,6 +288,7 @@ Note: MP3 output requires ffmpeg installed on your system.
     if not args.output.suffix.lower() == f".{output_format}":
         args.output = args.output.with_suffix(f".{output_format}")
 
+    text = clean_text_for_speech(text)
     print(f"Converting text ({len(text)} characters) using voice '{args.voice}'...")
     try:
         samples, sample_rate = text_to_audio(model, text, args.voice)
