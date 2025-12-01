@@ -20,6 +20,9 @@ import numpy as np
 import soundfile as sf
 from pydub import AudioSegment
 
+# Max characters per chunk - conservative to avoid phoneme overflow
+MAX_CHUNK_CHARS = 150
+
 
 def get_kokoro_model():
     """Initialize and return the Kokoro TTS model."""
@@ -41,37 +44,49 @@ def list_voices(model):
         print(f"  - {voice}")
 
 
-def split_text_into_chunks(text, max_chars=200):
-    """Split text into chunks at sentence boundaries."""
+def split_text_into_chunks(text, max_chars=MAX_CHUNK_CHARS):
+    """Split text into chunks, ensuring each chunk is under max_chars."""
+    # First, split on sentence boundaries
     sentences = re.split(r'(?<=[.!?])\s+', text.strip())
     
     chunks = []
-    current_chunk = ""
     
     for sentence in sentences:
-        if len(sentence) > max_chars:
-            if current_chunk:
-                chunks.append(current_chunk.strip())
-                current_chunk = ""
+        # If sentence fits, try to combine with previous chunk
+        if chunks and len(chunks[-1]) + len(sentence) + 1 <= max_chars:
+            chunks[-1] += " " + sentence
+        elif len(sentence) <= max_chars:
+            chunks.append(sentence)
+        else:
+            # Sentence too long - split on punctuation first
             parts = re.split(r'(?<=[,;:])\s+', sentence)
             for part in parts:
-                if len(current_chunk) + len(part) + 1 <= max_chars:
-                    current_chunk += (" " if current_chunk else "") + part
+                if chunks and len(chunks[-1]) + len(part) + 1 <= max_chars:
+                    chunks[-1] += " " + part
+                elif len(part) <= max_chars:
+                    chunks.append(part)
                 else:
-                    if current_chunk:
-                        chunks.append(current_chunk.strip())
-                    current_chunk = part
-        elif len(current_chunk) + len(sentence) + 1 <= max_chars:
-            current_chunk += (" " if current_chunk else "") + sentence
-        else:
-            if current_chunk:
-                chunks.append(current_chunk.strip())
-            current_chunk = sentence
+                    # Still too long - split on words
+                    words = part.split()
+                    current = ""
+                    for word in words:
+                        if len(current) + len(word) + 1 <= max_chars:
+                            current += (" " if current else "") + word
+                        else:
+                            if current:
+                                chunks.append(current)
+                            # Handle single words longer than max_chars
+                            if len(word) > max_chars:
+                                # Split very long words
+                                for i in range(0, len(word), max_chars):
+                                    chunks.append(word[i:i+max_chars])
+                                current = ""
+                            else:
+                                current = word
+                    if current:
+                        chunks.append(current)
     
-    if current_chunk:
-        chunks.append(current_chunk.strip())
-    
-    return chunks
+    return [c.strip() for c in chunks if c.strip()]
 
 
 def text_to_audio(model, text, voice="af_heart"):
