@@ -54,6 +54,32 @@ sudo apt install ffmpeg
 
 ## Usage
 
+**Important:** Always activate the virtual environment first:
+
+```bash
+source venv/bin/activate
+```
+
+### Command Line Options
+
+```
+usage: text2audio.py [-h] [-o OUTPUT] [-f {mp3,wav}] [-v VOICE] [-i]
+                     [--list-voices] [input_file]
+
+positional arguments:
+  input_file              Input text file to convert
+
+options:
+  -h, --help              Show help message and exit
+  -o, --output OUTPUT     Output audio file path
+  -f, --format {mp3,wav}  Output format (default: inferred from filename, or mp3)
+  -v, --voice VOICE       Voice to use (default: af_heart)
+  -i, --interactive       Interactive mode: paste text directly
+  --list-voices           List available voices and exit
+```
+
+### Examples
+
 ```bash
 # Convert a text file to WAV
 python text2audio.py input.txt -o output.wav
@@ -64,7 +90,7 @@ python text2audio.py input.txt -o output.mp3
 # Use a specific voice
 python text2audio.py input.txt -o output.wav -v am_adam
 
-# Interactive mode - paste text directly
+# Interactive mode - paste text directly, then press Ctrl+D when done
 python text2audio.py -i -o output.wav
 
 # List all available voices
